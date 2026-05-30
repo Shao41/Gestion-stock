@@ -1,6 +1,7 @@
 "use client";
 
-import { Table, Tag, Button, Input, Select, Space } from "antd";
+import { useState } from "react";
+import { Table, Tag, Button, Input, Select, Space, Modal, Form, InputNumber, message } from "antd";
 import {
   SearchOutlined,
   PlusOutlined,
@@ -21,7 +22,7 @@ interface Product {
   status: "ok" | "low" | "critical";
 }
 
-const products: Product[] = [
+const initialProducts: Product[] = [
   {
     key: "1",
     sku: "SKU-001",
@@ -116,89 +117,162 @@ const statusLabels: Record<string, string> = {
   critical: "Critique",
 };
 
-const columns: ColumnsType<Product> = [
-  {
-    title: "SKU",
-    dataIndex: "sku",
-    key: "sku",
-    width: 100,
-    render: (text) => <span className="text-muted-foreground font-mono text-xs">{text}</span>,
-  },
-  {
-    title: "Produit",
-    dataIndex: "name",
-    key: "name",
-    render: (text) => <span className="font-medium">{text}</span>,
-  },
-  {
-    title: "Categorie",
-    dataIndex: "category",
-    key: "category",
-    render: (text) => (
-      <Tag className="bg-muted text-muted-foreground border-0">{text}</Tag>
-    ),
-  },
-  {
-    title: "Stock",
-    dataIndex: "stock",
-    key: "stock",
-    sorter: (a, b) => a.stock - b.stock,
-    render: (stock, record) => (
-      <div className="flex items-center gap-2">
-        <span className="font-medium">{stock}</span>
-        <span className="text-muted-foreground text-xs">/ {record.minStock} min</span>
-      </div>
-    ),
-  },
-  {
-    title: "Prix",
-    dataIndex: "price",
-    key: "price",
-    sorter: (a, b) => a.price - b.price,
-    render: (price) => (
-      <span className="font-medium">{price.toLocaleString("fr-FR")} EUR</span>
-    ),
-  },
-  {
-    title: "Statut",
-    dataIndex: "status",
-    key: "status",
-    render: (status) => (
-      <Tag color={statusColors[status]} className="capitalize">
-        {statusLabels[status]}
-      </Tag>
-    ),
-  },
-  {
-    title: "Actions",
-    key: "actions",
-    width: 120,
-    render: () => (
-      <Space size="small">
-        <Button
-          type="text"
-          size="small"
-          icon={<EyeOutlined />}
-          className="text-muted-foreground hover:text-primary"
-        />
-        <Button
-          type="text"
-          size="small"
-          icon={<EditOutlined />}
-          className="text-muted-foreground hover:text-primary"
-        />
-        <Button
-          type="text"
-          size="small"
-          icon={<DeleteOutlined />}
-          className="text-muted-foreground hover:text-destructive"
-        />
-      </Space>
-    ),
-  },
+const categories = [
+  { value: "Electronique", label: "Electronique" },
+  { value: "Peripheriques", label: "Peripheriques" },
+  { value: "Moniteurs", label: "Moniteurs" },
+  { value: "Accessoires", label: "Accessoires" },
 ];
 
+function getStatus(stock: number, minStock: number): "ok" | "low" | "critical" {
+  if (stock <= minStock * 0.25) return "critical";
+  if (stock <= minStock) return "low";
+  return "ok";
+}
+
 export function ProductsTable() {
+  const [products, setProducts] = useState<Product[]>(initialProducts);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [form] = Form.useForm();
+  const [searchText, setSearchText] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
+
+  const filteredProducts = products.filter((product) => {
+    const matchesSearch =
+      product.name.toLowerCase().includes(searchText.toLowerCase()) ||
+      product.sku.toLowerCase().includes(searchText.toLowerCase());
+    const matchesCategory = !categoryFilter || categoryFilter === "all" || product.category === categoryFilter;
+    return matchesSearch && matchesCategory;
+  });
+
+  const handleAddProduct = () => {
+    setIsModalOpen(true);
+  };
+
+  const handleModalCancel = () => {
+    setIsModalOpen(false);
+    form.resetFields();
+  };
+
+  const handleModalOk = async () => {
+    try {
+      const values = await form.validateFields();
+      const newProduct: Product = {
+        key: `${Date.now()}`,
+        sku: `SKU-${String(products.length + 1).padStart(3, "0")}`,
+        name: values.name,
+        category: values.category,
+        stock: values.stock,
+        minStock: values.minStock,
+        price: values.price,
+        status: getStatus(values.stock, values.minStock),
+      };
+      setProducts([newProduct, ...products]);
+      message.success("Produit ajoute avec succes");
+      setIsModalOpen(false);
+      form.resetFields();
+    } catch {
+      // Form validation failed
+    }
+  };
+
+  const handleDelete = (key: string) => {
+    Modal.confirm({
+      title: "Supprimer le produit",
+      content: "Etes-vous sur de vouloir supprimer ce produit ?",
+      okText: "Supprimer",
+      cancelText: "Annuler",
+      okButtonProps: { danger: true },
+      onOk: () => {
+        setProducts(products.filter((p) => p.key !== key));
+        message.success("Produit supprime");
+      },
+    });
+  };
+
+  const columns: ColumnsType<Product> = [
+    {
+      title: "SKU",
+      dataIndex: "sku",
+      key: "sku",
+      width: 100,
+      render: (text) => <span className="text-muted-foreground font-mono text-xs">{text}</span>,
+    },
+    {
+      title: "Produit",
+      dataIndex: "name",
+      key: "name",
+      render: (text) => <span className="font-medium">{text}</span>,
+    },
+    {
+      title: "Categorie",
+      dataIndex: "category",
+      key: "category",
+      render: (text) => (
+        <Tag className="bg-muted text-muted-foreground border-0">{text}</Tag>
+      ),
+    },
+    {
+      title: "Stock",
+      dataIndex: "stock",
+      key: "stock",
+      sorter: (a, b) => a.stock - b.stock,
+      render: (stock, record) => (
+        <div className="flex items-center gap-2">
+          <span className="font-medium">{stock}</span>
+          <span className="text-muted-foreground text-xs">/ {record.minStock} min</span>
+        </div>
+      ),
+    },
+    {
+      title: "Prix",
+      dataIndex: "price",
+      key: "price",
+      sorter: (a, b) => a.price - b.price,
+      render: (price) => (
+        <span className="font-medium">{price.toLocaleString("fr-FR")} EUR</span>
+      ),
+    },
+    {
+      title: "Statut",
+      dataIndex: "status",
+      key: "status",
+      render: (status) => (
+        <Tag color={statusColors[status]} className="capitalize">
+          {statusLabels[status]}
+        </Tag>
+      ),
+    },
+    {
+      title: "Actions",
+      key: "actions",
+      width: 120,
+      render: (_, record) => (
+        <Space size="small">
+          <Button
+            type="text"
+            size="small"
+            icon={<EyeOutlined />}
+            className="text-muted-foreground hover:text-primary"
+          />
+          <Button
+            type="text"
+            size="small"
+            icon={<EditOutlined />}
+            className="text-muted-foreground hover:text-primary"
+          />
+          <Button
+            type="text"
+            size="small"
+            icon={<DeleteOutlined />}
+            className="text-muted-foreground hover:text-destructive"
+            onClick={() => handleDelete(record.key)}
+          />
+        </Space>
+      ),
+    },
+  ];
+
   return (
     <div className="bg-card rounded-xl border border-border overflow-hidden">
       <div className="p-5 border-b border-border">
@@ -212,19 +286,21 @@ export function ProductsTable() {
               placeholder="Rechercher..."
               prefix={<SearchOutlined className="text-muted-foreground" />}
               className="w-48"
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
             />
             <Select
               placeholder="Categorie"
               className="w-36"
+              allowClear
+              value={categoryFilter}
+              onChange={(value) => setCategoryFilter(value)}
               options={[
                 { value: "all", label: "Toutes" },
-                { value: "electronique", label: "Electronique" },
-                { value: "peripheriques", label: "Peripheriques" },
-                { value: "moniteurs", label: "Moniteurs" },
-                { value: "accessoires", label: "Accessoires" },
+                ...categories,
               ]}
             />
-            <Button type="primary" icon={<PlusOutlined />}>
+            <Button type="primary" icon={<PlusOutlined />} onClick={handleAddProduct}>
               Ajouter
             </Button>
           </div>
@@ -232,7 +308,7 @@ export function ProductsTable() {
       </div>
       <Table
         columns={columns}
-        dataSource={products}
+        dataSource={filteredProducts}
         pagination={{
           pageSize: 5,
           showSizeChanger: false,
@@ -241,6 +317,76 @@ export function ProductsTable() {
         }}
         className="[&_.ant-table]:bg-transparent"
       />
+
+      <Modal
+        title="Ajouter un nouveau produit"
+        open={isModalOpen}
+        onOk={handleModalOk}
+        onCancel={handleModalCancel}
+        okText="Ajouter"
+        cancelText="Annuler"
+        width={520}
+        destroyOnClose
+      >
+        <Form
+          form={form}
+          layout="vertical"
+          className="mt-4"
+          initialValues={{
+            stock: 0,
+            minStock: 10,
+            price: 0,
+          }}
+        >
+          <Form.Item
+            name="name"
+            label="Nom du produit"
+            rules={[{ required: true, message: "Veuillez entrer le nom du produit" }]}
+          >
+            <Input placeholder="Ex: MacBook Pro 14 M3" />
+          </Form.Item>
+
+          <Form.Item
+            name="category"
+            label="Categorie"
+            rules={[{ required: true, message: "Veuillez selectionner une categorie" }]}
+          >
+            <Select placeholder="Selectionner une categorie" options={categories} />
+          </Form.Item>
+
+          <div className="grid grid-cols-2 gap-4">
+            <Form.Item
+              name="stock"
+              label="Quantite en stock"
+              rules={[{ required: true, message: "Requis" }]}
+            >
+              <InputNumber min={0} className="w-full" placeholder="0" />
+            </Form.Item>
+
+            <Form.Item
+              name="minStock"
+              label="Stock minimum"
+              rules={[{ required: true, message: "Requis" }]}
+            >
+              <InputNumber min={1} className="w-full" placeholder="10" />
+            </Form.Item>
+          </div>
+
+          <Form.Item
+            name="price"
+            label="Prix (EUR)"
+            rules={[{ required: true, message: "Veuillez entrer le prix" }]}
+          >
+            <InputNumber
+              min={0}
+              step={0.01}
+              className="w-full"
+              placeholder="0.00"
+              formatter={(value) => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, " ")}
+            />
+          </Form.Item>
+        </Form>
+      </Modal>
     </div>
   );
 }
