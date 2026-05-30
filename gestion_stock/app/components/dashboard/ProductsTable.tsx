@@ -310,8 +310,8 @@ export function ProductsTable() {
         columns={columns}
         dataSource={filteredProducts}
         pagination={{
-          pageSize: 5,
-          showSizeChanger: false,
+          pageSize: 10,
+          showSizeChanger: true,
           showTotal: (total, range) =>
             `${range[0]}-${range[1]} sur ${total} produits`,
         }}
@@ -390,3 +390,6 @@ export function ProductsTable() {
     </div>
   );
 }
+
+export { initialProducts, categories, getStatus };
+export type { Product };
